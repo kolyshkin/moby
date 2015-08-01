@@ -38,12 +38,15 @@ RUN apt-get update && apt-get install -y \
 	build-essential \
 	curl \
 	dpkg-sig \
+	e2fslibs-dev \
 	git \
 	iptables \
 	libcap-dev \
 	libsqlite3-dev \
+	libxml2-dev \
 	mercurial \
 	parallel \
+	pkg-config \
 	python-mock \
 	python-pip \
 	python-websocket \
@@ -54,6 +57,15 @@ RUN apt-get update && apt-get install -y \
 	ubuntu-zfs \
 	libzfs-dev \
 	--no-install-recommends
+
+# Get libploop source for static compilation
+RUN git clone https://github.com/kolyshkin/ploop.git /usr/src/ploop
+
+# Compile and install ploop
+RUN cd /usr/src/ploop \
+	&& make \
+	&& make install \
+	&& ldconfig
 
 # Get lvm2 source for compiling statically
 RUN git clone -b v2_02_103 https://git.fedorahosted.org/git/lvm2.git /usr/local/lvm2
