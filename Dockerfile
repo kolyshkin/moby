@@ -31,7 +31,6 @@ RUN	echo deb http://ppa.launchpad.net/zfs-native/stable/ubuntu trusty main > /et
 
 # Packaged dependencies
 RUN apt-get update && apt-get install -y \
-	apparmor \
 	aufs-tools \
 	automake \
 	bash-completion \
@@ -41,7 +40,6 @@ RUN apt-get update && apt-get install -y \
 	dpkg-sig \
 	git \
 	iptables \
-	libapparmor-dev \
 	libcap-dev \
 	libsqlite3-dev \
 	mercurial \
@@ -151,7 +149,7 @@ RUN useradd --create-home --gid docker unprivilegeduser
 
 VOLUME /var/lib/docker
 WORKDIR /go/src/github.com/docker/docker
-ENV DOCKER_BUILDTAGS apparmor selinux
+ENV DOCKER_BUILDTAGS selinux
 
 # Let us use a .bashrc file
 RUN ln -sfv $PWD/.bashrc ~/.bashrc
