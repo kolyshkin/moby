@@ -11,13 +11,12 @@ func cfree(c *C.char) {
 	C.free(unsafe.Pointer(c))
 }
 
-// bool2cint converts Go bool to C.int
-func bool2cint(v bool) C.int {
-	if v == true {
+// boolToC converts Go bool to C.int
+func boolToC(v bool) C.int {
+	if v {
 		return 1
-	} else {
-		return 0
 	}
+	return 0
 }
 
 // convertSize converts a size in kilobytes to whatever ploop lib is using
