@@ -11,7 +11,7 @@ import (
 // isMountPoint determines if a directory is a mountpoint, by comparing the device for the
 // directory with the device for it's parent.  If they are the same, it's not a mountpoint,
 // if they're different, it is.
-func IsMountPoint(file string) (bool, error) {
+func isMountPoint(file string) (bool, error) {
 	stat, err := os.Stat(file)
 	if err != nil {
 		return false, err

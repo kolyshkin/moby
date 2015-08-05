@@ -295,7 +295,7 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 
 	// fast path -- if already mounted, return mount point
 	mnt := d.mnt(id)
-	m, err := IsMountPoint(mnt)
+	m, err := isMountPoint(mnt)
 	if m {
 		return mnt, nil
 	}
