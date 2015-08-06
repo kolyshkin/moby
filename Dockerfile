@@ -43,9 +43,12 @@ RUN apt-get update && apt-get install -y \
 	iptables \
 	libcap-dev \
 	libsqlite3-dev \
+	liblzma-dev \
 	libxml2-dev \
+	libz-dev \
 	mercurial \
 	parallel \
+	parted \
 	pkg-config \
 	python-mock \
 	python-pip \
@@ -59,7 +62,11 @@ RUN apt-get update && apt-get install -y \
 	--no-install-recommends
 
 # Get libploop source for static compilation
-RUN git clone https://github.com/kolyshkin/ploop.git /usr/src/ploop
+ENV PLOOP_COMMIT 8cde46dc5e0f1ffd00e7ffd53bdff1ac46a75640
+RUN git clone --no-checkout \
+		https://github.com/kolyshkin/ploop.git /usr/src/ploop && \
+	cd /usr/src/ploop && \
+	git reset --hard $PLOOP_COMMIT
 
 # Compile and install ploop
 RUN cd /usr/src/ploop \
