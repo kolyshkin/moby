@@ -92,7 +92,6 @@ has a performance and disk space footprint similar to that of dm-thinp on loop d
 ### Limitations
 
 * The driver is work in progress: experimental, not optimized for speed, and probably very buggy (this is my first Go project, not counting goploop).
-* The driver doesn't work when docker binary is compiled statically (I guess due to libxml2).
 * Ploop dynamic resize is not used, all images and containers are of the same size (frankly I don't know if Docker has a concept of a per-container disk space limit).
 
 ### TODO
