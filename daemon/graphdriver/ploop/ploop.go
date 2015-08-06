@@ -148,6 +148,7 @@ func (d *Driver) create(id string) error {
 	cp.Mode = d.mode
 	cp.File = d.img(id)
 	cp.CLog = d.clog
+	cp.Flags = ploop.NoLazy
 
 	return ploop.Create(&cp)
 }
