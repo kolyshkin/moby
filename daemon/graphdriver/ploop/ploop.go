@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
@@ -29,10 +30,12 @@ func init() {
 }
 
 type Driver struct {
-	home string
-	size uint64
-	mode ploop.ImageMode
-	clog uint
+	home   string
+	size   uint64
+	mode   ploop.ImageMode
+	clog   uint
+	getput sync.Mutex // Get/Put mutex
+	mounts map[string]int
 }
 
 func Init(home string, opt []string) (graphdriver.Driver, error) {
@@ -75,10 +78,11 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 	}
 
 	d := &Driver{
-		home: home,
-		mode: m,
-		size: uint64(s >> 10), // convert to KB
-		clog: uint(cl),
+		home:   home,
+		mode:   m,
+		size:   uint64(s >> 10), // convert to KB
+		clog:   uint(cl),
+		mounts: make(map[string]int),
 	}
 
 	// create base dirs so we don't have to use MkdirAll() later
@@ -291,18 +295,18 @@ func (d *Driver) Remove(id string) error {
 }
 
 func (d *Driver) Get(id, mountLabel string) (string, error) {
-	log.Debugf("[ploop] Get(id=%s)", id)
-	var mp ploop.MountParam
-
-	// fast path -- if already mounted, return mount point
 	mnt := d.mnt(id)
-	m, err := isMountPoint(mnt)
-	if m {
+
+	d.getput.Lock()
+	defer d.getput.Unlock()
+
+	if count := d.mounts[id]; count > 0 {
+		d.mounts[id] = count + 1
+		log.Debugf("[ploop] skip Get(id=%s), count=%d", id, count)
 		return mnt, nil
 	}
-	if err != nil && !os.IsNotExist(err) {
-		return "", err
-	}
+	log.Debugf("[ploop] Get(id=%s)", id)
+	var mp ploop.MountParam
 
 	dd := d.dd(id)
 	dir := d.dir(id)
@@ -335,10 +339,20 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 		return "", err
 	}
 
-	return mp.Target, nil
+	d.mounts[id] = 1
+	return mnt, nil
 }
 
 func (d *Driver) Put(id string) error {
+	d.getput.Lock()
+	defer d.getput.Unlock()
+
+	if count := d.mounts[id]; count > 1 {
+		d.mounts[id] = count - 1
+		log.Debugf("[ploop] skip Put(id=%s), count=%d", id, count)
+		return nil
+	}
+
 	log.Debugf("[ploop] Put(id=%s)", id)
 
 	dd := d.dd(id)
@@ -351,8 +365,9 @@ func (d *Driver) Put(id string) error {
 	err = p.Umount()
 	/* Ignore "not mounted" error */
 	if ploop.IsNotMounted(err) {
-		return nil
+		err = nil
 	}
+	delete(d.mounts, id)
 	return err
 }
 
