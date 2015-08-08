@@ -62,7 +62,7 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 				return nil, err
 			}
 		case "ploop.mode":
-			m, err = ploop.StringToImageMode(val)
+			m, err = ploop.ParseImageMode(val)
 			if err != nil {
 				log.Errorf("[ploop] Bad value for ploop.mode: %s", val)
 				return nil, err
@@ -110,6 +110,7 @@ func (d *Driver) Status() [][2]string {
 
 	status := [][2]string{
 		{"Home directory", d.home},
+		{"Ploop mode", d.mode.String()},
 		{"Ploop image size", units.BytesSize(float64(d.size << 10))},
 		{"Disk space used", units.BytesSize(float64(used))},
 		{"Disk space total", units.BytesSize(float64(total))},
