@@ -85,6 +85,11 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 		mounts: make(map[string]int),
 	}
 
+	if log.GetLevel() == log.DebugLevel {
+		// enable ploop debug as well
+		ploop.SetVerboseLevel(ploop.Timestamps)
+	}
+
 	// create base dirs so we don't have to use MkdirAll() later
 	dirs := []string{d.dir(""), d.mnt("")}
 	for _, dir := range dirs {
