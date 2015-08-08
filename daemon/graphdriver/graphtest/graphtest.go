@@ -146,6 +146,25 @@ func verifyFile(t *testing.T, path string, mode os.FileMode, uid, gid uint32) {
 
 }
 
+// readDir reads a directory just like ioutil.ReadDir()
+// then hides specific files (currently "lost+found")
+// so the tests don't "see" it
+func readDir(dir string) ([]os.FileInfo, error) {
+	a, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	b := a[:0]
+	for _, x := range a {
+		if x.Name() != "lost+found" {
+			b = append(b, x)
+		}
+	}
+
+	return b, nil
+}
+
 // Creates an new image and verifies it is empty and the right metadata
 func DriverTestCreateEmpty(t *testing.T, drivername string) {
 	driver := GetDriver(t, drivername)
@@ -167,7 +186,7 @@ func DriverTestCreateEmpty(t *testing.T, drivername string) {
 	verifyFile(t, dir, 0755|os.ModeDir, 0, 0)
 
 	// Verify that the directory is empty
-	fis, err := ioutil.ReadDir(dir)
+	fis, err := readDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +245,7 @@ func verifyBase(t *testing.T, driver graphdriver.Driver, name string) {
 	file := path.Join(dir, "a file")
 	verifyFile(t, file, 0222|os.ModeSetuid, 0, 0)
 
-	fis, err := ioutil.ReadDir(dir)
+	fis, err := readDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
