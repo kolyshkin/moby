@@ -36,6 +36,29 @@ func copyFile(src, dst string) (err error) {
 	return nil
 }
 
+// copyDir copies a directory (non-recursively, i.e. only files
+func copyDir(sdir, ddir string) (err error) {
+	files, err := ioutil.ReadDir(sdir)
+	if err != nil {
+		return err
+	}
+	for _, fi := range files {
+		name := fi.Name()
+		src := path.Join(sdir, name)
+		dst := path.Join(ddir, name)
+		// filter out non-files
+		if !fi.Mode().IsRegular() {
+			//			log.Warnf("[ploop] unexpected non-file %s", src)
+			continue
+		}
+		if err = copyFile(src, dst); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func writeVal(dir, id, val string) error {
 	m := os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	fd, err := os.OpenFile(path.Join(dir, id), m, 0644)

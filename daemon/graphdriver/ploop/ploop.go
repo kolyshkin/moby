@@ -31,6 +31,7 @@ func init() {
 
 type Driver struct {
 	home   string
+	master string
 	size   uint64
 	mode   ploop.ImageMode
 	clog   uint
@@ -40,8 +41,6 @@ type Driver struct {
 
 func Init(home string, opt []string) (graphdriver.Driver, error) {
 	log.Debugf("[ploop] Init(home=%s)", home)
-
-	/* TODO: maybe check it is ext4 */
 
 	// defaults
 	m := ploop.Expanded
@@ -79,6 +78,7 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 
 	d := &Driver{
 		home:   home,
+		master: path.Join(home, "master"),
 		mode:   m,
 		size:   uint64(s >> 10), // convert to KB
 		clog:   uint(cl),
@@ -90,12 +90,28 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 		ploop.SetVerboseLevel(ploop.Timestamps)
 	}
 
-	// create base dirs so we don't have to use MkdirAll() later
-	dirs := []string{d.dir(""), d.mnt("")}
+	// Remove old master image as image params might have changed
+	if err := os.RemoveAll(d.master); err != nil {
+		log.Warn(err) // might not be fatal but worth reporting
+	}
+
+	// create needed base dirs so we don't have to use MkdirAll() later
+	dirs := []string{d.dir(""), d.mnt(""), d.master}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, err
 		}
+	}
+
+	// Create a new master image
+	file := path.Join(d.master, imagePrefix)
+	cp := ploop.CreateParam{Size: d.size, Mode: d.mode, File: file, CLog: d.clog, Flags: ploop.NoLazy}
+
+	if err := ploop.Create(&cp); err != nil {
+		log.Errorf("Can't create ploop image! Maybe some prerequisites are not met?")
+		log.Errorf("Make sure you have ext4 filesystem in %s.", home)
+		log.Errorf("Check that e2fsprogs and parted are installed.")
+		return nil, err
 	}
 
 	return graphdriver.NaiveDiffDriver(d), nil
@@ -152,15 +168,7 @@ func (d *Driver) Cleanup() error {
 }
 
 func (d *Driver) create(id string) error {
-	var cp ploop.CreateParam
-
-	cp.Size = d.size
-	cp.Mode = d.mode
-	cp.File = d.img(id)
-	cp.CLog = d.clog
-	cp.Flags = ploop.NoLazy
-
-	return ploop.Create(&cp)
+	return copyDir(d.master, d.dir(id))
 }
 
 // add some info to our parent
