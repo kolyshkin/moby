@@ -5,7 +5,17 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"syscall"
 )
+
+func syncAndClose(file *os.File) error {
+	err := syscall.Fdatasync(int(file.Fd()))
+	err2 := file.Close()
+	if err2 != nil {
+		return err2
+	}
+	return err
+}
 
 // copyFile copies a file (like command-line cp)
 func copyFile(src, dst string) (err error) {
@@ -13,24 +23,21 @@ func copyFile(src, dst string) (err error) {
 	if err != nil {
 		return
 	}
-	defer s.Close()
 
 	d, err := os.Create(dst)
 	if err != nil {
+		s.Close()
 		return
 	}
-	defer func() {
-		cerr := d.Close()
-		if err == nil {
-			err = cerr
-		}
-	}()
 
 	_, err = io.Copy(d, s)
+	s.Close()
 	if err != nil {
+		d.Close()
 		os.Remove(dst)
 		return
 	}
+	go syncAndClose(d)
 
 	// TODO: chown/chmod maybe?
 	return nil
