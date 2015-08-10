@@ -71,6 +71,12 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 			if err != nil || cl < 6 || cl > 16 {
 				return nil, fmt.Errorf("[ploop] Bad value for ploop.clog: %s", val)
 			}
+		case "ploop.libdebug":
+			libDebug, err := strconv.Atoi(val)
+			if err != nil {
+				return nil, fmt.Errorf("[ploop] Bad value for ploop.libdebug: %s", val)
+			}
+			ploop.SetVerboseLevel(libDebug)
 		default:
 			return nil, fmt.Errorf("[ploop] Unknown option %s", key)
 		}
@@ -83,11 +89,6 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 		size:   uint64(s >> 10), // convert to KB
 		clog:   uint(cl),
 		mounts: make(map[string]int),
-	}
-
-	if log.GetLevel() == log.DebugLevel {
-		// enable ploop debug as well
-		ploop.SetVerboseLevel(ploop.Timestamps)
 	}
 
 	// Remove old master image as image params might have changed,
