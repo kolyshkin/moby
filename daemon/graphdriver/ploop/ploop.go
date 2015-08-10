@@ -90,10 +90,9 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 		ploop.SetVerboseLevel(ploop.Timestamps)
 	}
 
-	// Remove old master image as image params might have changed
-	if err := os.RemoveAll(d.master); err != nil {
-		log.Warn(err) // might not be fatal but worth reporting
-	}
+	// Remove old master image as image params might have changed,
+	// ignoring the error if it's not there
+	d.removeMaster(true)
 
 	// create needed base dirs so we don't have to use MkdirAll() later
 	dirs := []string{d.dir(""), d.mnt(""), d.master}
@@ -159,8 +158,27 @@ func (d *Driver) GetMetadata(id string) (map[string]string, error) {
 	return metadata, nil
 }
 
+func (d *Driver) removeMaster(ignoreOpenError bool) {
+	// Master image might be mounted
+	p, err := ploop.Open(path.Join(d.master, ddxml))
+	if err == nil {
+		if m, _ := p.IsMounted(); m {
+			p.Umount() // ignore errors
+		}
+		p.Close()
+	} else if !ignoreOpenError {
+		log.Warn(err)
+	}
+	// Remove master image
+	if err := os.RemoveAll(d.master); err != nil {
+		log.Warn(err) // might not be fatal but worth reporting
+	}
+}
+
 func (d *Driver) Cleanup() error {
 	log.Debugf("[ploop] Cleanup()")
+
+	d.removeMaster(false)
 
 	// TODO: unmount all mounted images, stop all ploop devices
 
