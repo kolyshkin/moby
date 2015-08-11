@@ -29,14 +29,19 @@ func init() {
 	graphdriver.Register("ploop", Init)
 }
 
+type mount struct {
+	count  int
+	device string
+}
+
 type Driver struct {
-	home   string
-	master string
-	size   uint64
-	mode   ploop.ImageMode
-	clog   uint
-	getput sync.Mutex // Get/Put mutex
-	mounts map[string]int
+	home    string
+	master  string
+	size    uint64
+	mode    ploop.ImageMode
+	clog    uint
+	mountsM sync.RWMutex
+	mounts  map[string]*mount
 }
 
 func Init(home string, opt []string) (graphdriver.Driver, error) {
@@ -88,7 +93,7 @@ func Init(home string, opt []string) (graphdriver.Driver, error) {
 		mode:   m,
 		size:   uint64(s >> 10), // convert to KB
 		clog:   uint(cl),
-		mounts: make(map[string]int),
+		mounts: make(map[string]*mount),
 	}
 
 	// Remove old master image as image params might have changed,
@@ -129,6 +134,14 @@ func (d *Driver) Status() [][2]string {
 	free := buf.Bfree * bs
 	used := (buf.Blocks - buf.Bfree) * bs
 
+	d.mountsM.RLock()
+	devCount := len(d.mounts)
+	var devices string
+	for _, m := range d.mounts {
+		devices = devices + " " + m.device[5:]
+	}
+	d.mountsM.RUnlock()
+
 	status := [][2]string{
 		{"Home directory", d.home},
 		{"Ploop mode", d.mode.String()},
@@ -136,6 +149,8 @@ func (d *Driver) Status() [][2]string {
 		{"Disk space used", units.BytesSize(float64(used))},
 		{"Disk space total", units.BytesSize(float64(total))},
 		{"Disk space available", units.BytesSize(float64(free))},
+		{"Active device count", strconv.Itoa(devCount)},
+		{"Active devices", devices},
 		/*
 			{"Total images", xxx},
 			{"Mounted devices", xxx},
@@ -181,7 +196,15 @@ func (d *Driver) Cleanup() error {
 
 	d.removeMaster(false)
 
-	// TODO: unmount all mounted images, stop all ploop devices
+	d.mountsM.Lock()
+	for id, m := range d.mounts {
+		log.Warnf("[ploop] Cleanup: unxpected ploop device %s, unmounting", m.device)
+		if err := ploop.UmountByDevice(m.device); err != nil {
+			log.Warnf("[ploop] Cleanup: %s", err)
+		}
+		delete(d.mounts, id)
+	}
+	d.mountsM.Unlock()
 
 	return nil
 }
@@ -314,8 +337,17 @@ func (d *Driver) Create(id, parent string) error {
 
 func (d *Driver) Remove(id string) error {
 	log.Debugf("[ploop] Remove(id=%s)", id)
-	// This assumes the ploop has been properly
-	// Get/Put:ed and is therefore unmounted
+
+	// Check if ploop was properly Get/Put:ed and is therefore unmounted
+again:
+	d.mountsM.Lock()
+	_, ok := d.mounts[id]
+	d.mountsM.Unlock()
+	if ok {
+		log.Warnf("[ploop] Remove(id=%s): unexpected on non-Put()", id)
+		d.Put(id)
+		goto again
+	}
 
 	dirs := []string{d.dir(id), d.mnt(id)}
 	for _, d := range dirs {
@@ -330,14 +362,19 @@ func (d *Driver) Remove(id string) error {
 func (d *Driver) Get(id, mountLabel string) (string, error) {
 	mnt := d.mnt(id)
 
-	d.getput.Lock()
-	defer d.getput.Unlock()
-
-	if count := d.mounts[id]; count > 0 {
-		d.mounts[id] = count + 1
-		log.Debugf("[ploop] skip Get(id=%s), count=%d", id, count)
-		return mnt, nil
+	d.mountsM.Lock()
+	defer d.mountsM.Unlock()
+	m, ok := d.mounts[id]
+	if ok {
+		if m.count > 0 {
+			m.count++
+			log.Debugf("[ploop] skip Get(id=%s), dev=%s, count=%d", id, m.device, m.count)
+			return mnt, nil
+		} else {
+			log.Warnf("[ploop] Get() id=%s, dev=%s: unexpected count=%d", id, m.device, m.count)
+		}
 	}
+
 	log.Debugf("[ploop] Get(id=%s)", id)
 	var mp ploop.MountParam
 
@@ -367,23 +404,28 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 	}
 
 	// Mount
-	_, err = p.Mount(&mp)
+	dev, err := p.Mount(&mp)
 	if err != nil {
 		return "", err
 	}
 
-	d.mounts[id] = 1
+	d.mounts[id] = &mount{1, dev}
+
 	return mnt, nil
 }
 
 func (d *Driver) Put(id string) error {
-	d.getput.Lock()
-	defer d.getput.Unlock()
-
-	if count := d.mounts[id]; count > 1 {
-		d.mounts[id] = count - 1
-		log.Debugf("[ploop] skip Put(id=%s), count=%d", id, count)
-		return nil
+	d.mountsM.Lock()
+	defer d.mountsM.Unlock()
+	m, ok := d.mounts[id]
+	if ok {
+		if m.count > 1 {
+			m.count--
+			log.Debugf("[ploop] skip Put(id=%s), dev=%s, count=%d", id, m.device, m.count)
+			return nil
+		} else if m.count < 1 {
+			log.Warnf("[ploop] Put(id=%s): unexpected mount count %d", m.count)
+		}
 	}
 
 	log.Debugf("[ploop] Put(id=%s)", id)
