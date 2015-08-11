@@ -373,9 +373,8 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 			log.Debugf("[ploop] skip Get(id=%s), dev=%s, count=%d", id, m.device, m.count)
 			d.mountsM.Unlock()
 			return mnt, nil
-		} else {
-			log.Warnf("[ploop] Get() id=%s, dev=%s: unexpected count=%d", id, m.device, m.count)
 		}
+		log.Warnf("[ploop] Get() id=%s, dev=%s: unexpected count=%d", id, m.device, m.count)
 	} else {
 		m = &mount{0, ""}
 		d.mounts[id] = m
