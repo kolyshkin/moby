@@ -201,7 +201,7 @@ func (d *Driver) Cleanup() error {
 
 	d.mountsM.Lock()
 	for id, m := range d.mounts {
-		log.Warnf("[ploop] Cleanup: unxpected ploop device %s, unmounting", m.device)
+		log.Warnf("[ploop] Cleanup: unexpected ploop device %s, unmounting", m.device)
 		if err := ploop.UmountByDevice(m.device); err != nil {
 			log.Warnf("[ploop] Cleanup: %s", err)
 		}
