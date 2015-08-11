@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
@@ -30,7 +31,7 @@ func init() {
 }
 
 type mount struct {
-	count  int
+	count  int32
 	device string
 }
 
@@ -138,7 +139,9 @@ func (d *Driver) Status() [][2]string {
 	devCount := len(d.mounts)
 	var devices string
 	for _, m := range d.mounts {
-		devices = devices + " " + m.device[5:]
+		if m.count > 0 {
+			devices = devices + " " + m.device[5:]
+		}
 	}
 	d.mountsM.RUnlock()
 
@@ -363,17 +366,21 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 	mnt := d.mnt(id)
 
 	d.mountsM.Lock()
-	defer d.mountsM.Unlock()
 	m, ok := d.mounts[id]
 	if ok {
 		if m.count > 0 {
-			m.count++
+			atomic.AddInt32(&m.count, 1)
 			log.Debugf("[ploop] skip Get(id=%s), dev=%s, count=%d", id, m.device, m.count)
+			d.mountsM.Unlock()
 			return mnt, nil
 		} else {
 			log.Warnf("[ploop] Get() id=%s, dev=%s: unexpected count=%d", id, m.device, m.count)
 		}
+	} else {
+		m = &mount{0, ""}
+		d.mounts[id] = m
 	}
+	d.mountsM.Unlock()
 
 	log.Debugf("[ploop] Get(id=%s)", id)
 	var mp ploop.MountParam
@@ -409,24 +416,26 @@ func (d *Driver) Get(id, mountLabel string) (string, error) {
 		return "", err
 	}
 
-	d.mounts[id] = &mount{1, dev}
+	m.device = dev
+	atomic.AddInt32(&m.count, 1)
 
 	return mnt, nil
 }
 
 func (d *Driver) Put(id string) error {
 	d.mountsM.Lock()
-	defer d.mountsM.Unlock()
 	m, ok := d.mounts[id]
 	if ok {
 		if m.count > 1 {
-			m.count--
+			atomic.AddInt32(&m.count, -1)
 			log.Debugf("[ploop] skip Put(id=%s), dev=%s, count=%d", id, m.device, m.count)
+			d.mountsM.Unlock()
 			return nil
 		} else if m.count < 1 {
 			log.Warnf("[ploop] Put(id=%s): unexpected mount count %d", m.count)
 		}
 	}
+	d.mountsM.Unlock()
 
 	log.Debugf("[ploop] Put(id=%s)", id)
 
@@ -442,7 +451,11 @@ func (d *Driver) Put(id string) error {
 	if ploop.IsNotMounted(err) {
 		err = nil
 	}
+
+	d.mountsM.Lock()
 	delete(d.mounts, id)
+	d.mountsM.Unlock()
+
 	return err
 }
 
