@@ -34,6 +34,7 @@ var (
 		"devicemapper",
 		"overlay",
 		"vfs",
+		"ploop", // experimental for now
 	}
 
 	FsNames = map[FsMagic]string{
