@@ -1,23 +1,31 @@
 ## Docker ploop graphdriver
 
-This document describes how to run the (*currently very experimental*) Docker ploop graphdriver.
+This document describes how to run the Docker ploop graphdriver.
 
-Ploop is the enhanced block loop device, currently only available in
-[OpenVZ](https://openvz.org/) kernel. To know more about ploop, see
+Ploop is the enhanced block loop device, developed for
+[OpenVZ](https://openvz.org/) since around 2008.
+To know more about ploop, see
 [openvz.org/Ploop](https://openvz.org/Ploop).
 
-This driver relies on the kernel ploop driver, a ploop C library and a goploop
-library wrapper. It also uses shared deltas (via hardlinks), a configuration
+This driver is built upon the following stack of software:
+* kernel ploop driver (available in OpenVZ kernels)
+* ploop C library [github.com/kolyshkin/ploop](https://github.com/kolyshkin/ploop)
+* goploop wrapper of the abovementioned library [github.com/kolyshkin/goploop](https://github.com/kolyshkin/goploop)
+
+Note this driver uses shared deltas (via hardlinks), a feature
 not officially supported by libploop (but apparently it works fine).
 
 ### Prerequisites
 
-To try the Docker ploop graphdriver, you need to have VZ7 installed,
+To try this, you need to have VZ7 installed,
 see [openvz.org/Quick_install](https://openvz.org/Quick_install)).
 Technically, any system with ploop kernel driver and working Docker
 will do, but currently it appears that VZ7 is the only such system.
 
-Once VZ7 is up and running, you need to install docker:
+Note you can either install the full VZ7 system, or just the kernel.
+For the latter option, you need a CentOS/RHEL 7 system ready.
+
+Once VZ7 (or its kernel) is up and running, you need to install docker:
 ```bash
 yum install docker
 service docker start
@@ -25,7 +33,7 @@ service docker start
 
 ### Building
 
-Next, download my docker fork from github, and switch to ploop branch:
+Download my docker fork from github, and switch to ploop branch:
 ```bash
 yum install git
 git clone https://github.com/kolyshkin/docker
@@ -35,9 +43,9 @@ git checkout ploop
 
 All the following commands assume you are in docker git root directory.
 
-Next, try to build the beast:
+To build it:
 ```bash
-make dynbinary
+make
 ```
 
 ### Using
@@ -47,14 +55,12 @@ runs are faster thanks to caching), you can try starting it:
 
 ```bash
 service docker stop
-mv /var/lib/docker /var/lib/docker-orig
-mkdir /var/lib/docker-ploop
-ln -s /var/lib/docker-ploop /var/lib/docker
-./bundles/1.7.1/dynbinary/docker-1.7.1 -D -d -s ploop # -d for daemon, -D for debug, -s to use ploop gd
+rm /var/lib/docker/*
+./bundles/latest/binary/docker -D -d -s ploop
+# Options: -d for daemon, -D for debug, -s to use ploop graphdriver
 ```
 
-Now you can try some docker commands.
-The fastest one is probably this:
+Now you can try some docker commands. The fastest one is probably this:
 ```bash
 docker run busybox ps
 ```
@@ -62,46 +68,39 @@ docker run busybox ps
 You might notice docker daemon complains about incompatible
 client version. You can fix it, too.
 ```bash
-export PATH=`pwd`:$PATH
+export PATH=`pwd`/bundles/latest/binary/:$PATH
 hash -r
 which docker # make sure it shows the one you built
 ```
 
 For something slower, you can try rebuilding yourself:
 ```bash
-make dynbinary
+make
 ```
 
-### Escaping
+### Testing
 
-If something went wrong, you need to switch back to stock Docker.
+A good stress test creating and removing many images in parallel is
+[github.com/crosbymichael/docker-stress](https://github.com/crosbymichael/docker-stress).
+
 ```bash
-killall -TERM docker # stop the daemon
-rm -f /var/lib/docker # rm the symlink
-ln -s /var/lib/docker-orig /var/lib/docker
-rm -rf bundles
-hash -r
-service docker start
+git clone https://github.com/crosbymichael/docker-stress
+cd doocker-stress
+go build -v .
+./docker-stress --containers 50 -c 200 -k 3s
 ```
 
-### Initial results
-
-Some very limited non-scientific tests shows that the driver in it current form
-has a performance and disk space footprint similar to that of dm-thinp on loop device.
+Another stress test I used is [github.com/spotify/docker-stress](https://vgithub.com/spotify/docker-stress).
 
 ### Limitations
 
-* The driver is work in progress: experimental, not optimized for speed, and probably very buggy (this is my first Go project, not counting goploop).
-* Ploop dynamic resize is not used, all images and containers are of the same size (frankly I don't know if Docker has a concept of a per-container disk space limit).
+* The driver is a work in progress: not optimized for speed, probably buggy (this is my first Go project, not counting goploop).
+* Ploop dynamic resize is not used, all images and containers are of the same size (frankly I'm not sure if Docker has a concept of a per-container disk space limit).
 
 ### TODO
 
-* Fix the FIXMEs
-* Do the TODOs
-* Per-ploop image locking
-* Protect Get/Set and Create/Remove by mutexes
-* Move clone code to goploop (or even libploop)
-* Test
+* Move clone code to goploop (or even libploop)?
+* More stress testing
 * Performance comparison
 * Implement "changed files" tracker to optimize Diff()/Changes()
 
