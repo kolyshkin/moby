@@ -76,7 +76,7 @@ RUN cd /usr/src/libxml2 \
 	&& make install-libLTLIBRARIES
 
 # Get libploop source for static compilation
-ENV PLOOP_COMMIT 8cde46dc5e0f1ffd00e7ffd53bdff1ac46a75640
+ENV PLOOP_COMMIT 4501da4b334bc31c6c4efd30e6213c38b2bd2ea0
 RUN git clone --no-checkout \
 		https://github.com/kolyshkin/ploop.git /usr/src/ploop && \
 	cd /usr/src/ploop && \

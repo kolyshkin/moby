@@ -1,6 +1,3 @@
-CGO_LDFLAGS	:= -l:libploop.a
-export CGO_LDFLAGS
-
 all: build
 
 build:
@@ -9,4 +6,7 @@ build:
 test:
 	go test -v .
 
-.PHONY: all build test
+bench:
+	go test -v -run=XXX -bench=. -benchtime=10s
+
+.PHONY: all build test bench

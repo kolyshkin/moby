@@ -1,4 +1,4 @@
-# goploop
+# goploop [![GoDoc](https://godoc.org/github.com/kolyshkin/goploop?status.png)](https://godoc.org/github.com/kolyshkin/goploop)
 
 This is a Go wrapper for [libploop](https://github.com/kolyshkin/ploop/tree/master/lib),
 a C library to manage ploop.
@@ -29,6 +29,16 @@ After installing OpenVZ, you might need to run:
 
     yum install ploop-devel
 
+## Building
+
+If you are going to build a binary that uses this package statically,
+you need to add `static_build` build tag to your `go build` command,
+such as:
+
+   go build -tags static_build
+
 ## Usage
 
-For examples of how to use the package, see [ploop_test.go](ploop_test.go).
+This package is used by Docker ploop graphdriver, see https://github.com/kolyshkin/docker/tree/ploop/daemon/graphdriver/ploop
+
+For primitive examples of how to use the package, see [ploop_test.go](ploop_test.go).

@@ -5,18 +5,19 @@ package ploop
 import (
 	"bufio"
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/dustin/go-humanize"
 )
 
 var (
-	old_pwd  string
-	test_dir string
-	d        Ploop
-	snap     string
+	oldPwd  string
+	testDir string
+	d       Ploop
+	snap    string
 )
 
 const baseDelta = "root.hdd"
@@ -39,23 +40,25 @@ func chk(err error) {
 	}
 }
 
-func TestPrepare(t *testing.T) {
+func prepare(dir string) {
 	var err error
 
-	old_pwd, err = os.Getwd()
+	oldPwd, err = os.Getwd()
 	chk(err)
 
-	test_dir, err = ioutil.TempDir(old_pwd, "tmp-test")
+	testDir, err = ioutil.TempDir(oldPwd, dir)
 	chk(err)
 
-	err = os.Chdir(test_dir)
+	err = os.Chdir(testDir)
 	chk(err)
 
-	SetVerboseLevel(255)
+	SetVerboseLevel(NoStdout)
 	SetLogLevel(1)
 	SetLogFile("ploop.log")
+}
 
-	t.Logf("Running tests in %s", test_dir)
+func TestPrepare(t *testing.T) {
+	prepare("tmp-test")
 }
 
 func TestUUID(t *testing.T) {
@@ -67,7 +70,7 @@ func TestUUID(t *testing.T) {
 	t.Logf("Got uuid %s", uuid)
 }
 
-func TestCreate(t *testing.T) {
+func create() {
 	size := "384M"
 	var p CreateParam
 
@@ -75,7 +78,7 @@ func TestCreate(t *testing.T) {
 	if e != nil {
 		abort("humanize.ParseBytes: can't parse %s: %s", size, e)
 	}
-	p.Size = s
+	p.Size = s / 1024
 	p.File = baseDelta
 
 	e = Create(&p)
@@ -84,13 +87,21 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestOpen(t *testing.T) {
+func TestCreate(t *testing.T) {
+	create()
+}
+
+func open() {
 	var e error
 
 	d, e = Open("DiskDescriptor.xml")
 	if e != nil {
 		abort("Open: %s", e)
 	}
+}
+
+func TestOpen(t *testing.T) {
+	open()
 }
 
 func TestMount(t *testing.T) {
@@ -116,6 +127,7 @@ func resize(t *testing.T, size string, offline bool) {
 	if e != nil {
 		t.Fatalf("humanize.ParseBytes: can't parse %s: %s", size, e)
 	}
+	s = s / 1024
 
 	e = d.Resize(s, offline)
 	if e != nil {
@@ -310,18 +322,124 @@ func TestImageInfo(t *testing.T) {
 
 func cleanup() {
 	if d.d != nil {
-		d.Umount()
+		if m, _ := d.IsMounted(); m {
+			d.Umount()
+		}
 		d.Close()
 	}
-	if old_pwd != "" {
-		os.Chdir(old_pwd)
+	if oldPwd != "" {
+		os.Chdir(oldPwd)
 	}
-	if test_dir != "" {
-		os.RemoveAll(test_dir)
+	if testDir != "" {
+		os.RemoveAll(testDir)
 	}
 }
 
 // TestCleanup is the last test, removing files created by previous tests
 func TestCleanup(t *testing.T) {
+	cleanup()
+}
+
+func BenchmarkMountUmount(b *testing.B) {
+	b.StopTimer()
+	prepare("tmp-bench")
+	SetVerboseLevel(NoStdout)
+	create()
+	open()
+	mnt := "mnt"
+	e := os.Mkdir(mnt, 0755)
+	chk(e)
+	p := MountParam{Target: mnt, Readonly: true}
+
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		_, e := d.Mount(&p)
+		if e != nil {
+			b.Fatalf("Mount: %s", e)
+		}
+		e = d.Umount()
+		if e != nil {
+			b.Fatalf("Umount: %s", e)
+		}
+	}
+	b.StopTimer()
+	cleanup()
+}
+
+func BenchmarkIsMounted(b *testing.B) {
+	b.StopTimer()
+	prepare("tmp-bench")
+	SetVerboseLevel(NoStdout)
+	create()
+	open()
+	mnt := "mnt"
+	e := os.Mkdir(mnt, 0755)
+	chk(e)
+	p := MountParam{Target: mnt, Readonly: true}
+	_, e = d.Mount(&p)
+	if e != nil {
+		b.Fatalf("Mount: %s", e)
+	}
+
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		_, e := d.IsMounted()
+		if e != nil {
+			b.Fatalf("IsMounted: %s", e)
+		}
+	}
+	b.StopTimer()
+	cleanup()
+}
+
+func BenchmarkFSInfo(b *testing.B) {
+	b.StopTimer()
+	prepare("tmp-bench")
+	SetVerboseLevel(NoStdout)
+	create()
+	open()
+	mnt := "mnt"
+	e := os.Mkdir(mnt, 0755)
+	chk(e)
+	p := MountParam{Target: mnt, Readonly: true}
+	_, e = d.Mount(&p)
+	if e != nil {
+		b.Fatalf("Mount: %s", e)
+	}
+
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		_, e := FSInfo("DiskDescriptor.xml")
+		if e != nil {
+			b.Fatalf("FSInfo: %s", e)
+		}
+	}
+	b.StopTimer()
+	cleanup()
+}
+
+func BenchmarkImageInfo(b *testing.B) {
+	b.StopTimer()
+	prepare("tmp-bench")
+	SetVerboseLevel(NoStdout)
+	create()
+	open()
+	mnt := "mnt"
+	e := os.Mkdir(mnt, 0755)
+	chk(e)
+	p := MountParam{Target: mnt, Readonly: true}
+	_, e = d.Mount(&p)
+	if e != nil {
+		b.Fatalf("Mount: %s", e)
+	}
+
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		_, e := d.ImageInfo()
+		if e != nil {
+			b.Fatalf("ImageInfo: %s", e)
+		}
+	}
+	b.StopTimer()
 	cleanup()
 }
