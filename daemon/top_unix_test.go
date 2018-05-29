@@ -8,6 +8,7 @@ import (
 
 func TestContainerTopValidatePSArgs(t *testing.T) {
 	tests := map[string]bool{
+		defaultPsArgs:               false,
 		"ae -o uid=PID":             true,
 		"ae -o \"uid= PID\"":        true,  // ascii space (0x20)
 		"ae -o \"uid= PID\"":        false, // unicode space (U+2003, 0xe2 0x80 0x83)

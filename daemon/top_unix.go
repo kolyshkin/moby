@@ -16,6 +16,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const defaultPsArgs = "-ef"
+
 func validatePSArgs(psArgs string) error {
 	// NOTE: \\s does not detect unicode whitespaces.
 	// So we use fieldsASCII instead of strings.Fields in parsePSOutput.
@@ -137,11 +139,11 @@ func psPidsArg(pids []uint32) string {
 // running ps, or parsing the output.
 func (daemon *Daemon) ContainerTop(name string, psArgs string) (*container.ContainerTopOKBody, error) {
 	if psArgs == "" {
-		psArgs = "-ef"
-	}
-
-	if err := validatePSArgs(psArgs); err != nil {
-		return nil, err
+		psArgs = defaultPsArgs
+	} else {
+		if err := validatePSArgs(psArgs); err != nil {
+			return nil, err
+		}
 	}
 
 	container, err := daemon.GetContainer(name)
