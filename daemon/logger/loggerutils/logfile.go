@@ -3,7 +3,6 @@ package loggerutils // import "github.com/docker/docker/daemon/logger/loggerutil
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -484,7 +483,7 @@ func tailFile(f io.ReadSeeker, watcher *logger.LogWatcher, createDecoder makeDec
 			return
 		}
 		select {
-		case <-watcher.WatchClose():
+		case <-watcher.WatchConsumerGone():
 			return
 		case watcher.Msg <- msg:
 		}
@@ -502,20 +501,7 @@ func followLogs(f *os.File, logWatcher *logger.LogWatcher, notifyRotate chan int
 	}
 	defer func() {
 		f.Close()
-		fileWatcher.Remove(name)
 		fileWatcher.Close()
-	}()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go func() {
-		select {
-		case <-logWatcher.WatchClose():
-			fileWatcher.Remove(name)
-			cancel()
-		case <-ctx.Done():
-			return
-		}
 	}()
 
 	var retries int
@@ -552,7 +538,9 @@ func followLogs(f *os.File, logWatcher *logger.LogWatcher, notifyRotate chan int
 			case fsnotify.Rename, fsnotify.Remove:
 				select {
 				case <-notifyRotate:
-				case <-ctx.Done():
+				case <-logWatcher.WatchProducerGone():
+					return errDone
+				case <-logWatcher.WatchConsumerGone():
 					return errDone
 				}
 				if err := handleRotate(); err != nil {
@@ -574,7 +562,9 @@ func followLogs(f *os.File, logWatcher *logger.LogWatcher, notifyRotate chan int
 				return errRetry
 			}
 			return err
-		case <-ctx.Done():
+		case <-logWatcher.WatchProducerGone():
+			return errDone
+		case <-logWatcher.WatchConsumerGone():
 			return errDone
 		}
 	}
@@ -620,23 +610,11 @@ func followLogs(f *os.File, logWatcher *logger.LogWatcher, notifyRotate chan int
 		if !until.IsZero() && msg.Timestamp.After(until) {
 			return
 		}
+		// send the message, unless the consumer is gone
 		select {
 		case logWatcher.Msg <- msg:
-		case <-ctx.Done():
-			logWatcher.Msg <- msg
-			for {
-				msg, err := decodeLogLine()
-				if err != nil {
-					return
-				}
-				if !since.IsZero() && msg.Timestamp.Before(since) {
-					continue
-				}
-				if !until.IsZero() && msg.Timestamp.After(until) {
-					return
-				}
-				logWatcher.Msg <- msg
-			}
+		case <-logWatcher.WatchConsumerGone():
+			return
 		}
 	}
 }
