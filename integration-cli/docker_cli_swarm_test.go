@@ -1451,7 +1451,7 @@ func (s *DockerSwarmSuite) TestSwarmClusterRotateUnlockKey(c *check.C) {
 			c.Assert(getNodeStatus(c, d), checker.Equals, swarm.LocalNodeStateActive)
 
 			outs, err = d.Cmd("node", "ls")
-			c.Assert(err, checker.IsNil)
+			c.Assert(err, checker.IsNil, check.Commentf("out: %v", outs))
 			c.Assert(outs, checker.Not(checker.Contains), "Swarm is encrypted and needs to be unlocked")
 		}
 
