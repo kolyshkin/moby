@@ -72,14 +72,14 @@ func (s *DockerSuite) TestLogsAPINoStdoutNorStderr(c *check.C) {
 func (s *DockerSuite) TestLogsAPIFollowEmptyOutput(c *check.C) {
 	name := "logs_test"
 	t0 := time.Now()
-	dockerCmd(c, "run", "-d", "-t", "--name", name, "busybox", "sleep", "10")
+	dockerCmd(c, "run", "-d", "-t", "--name", name, "busybox", "sleep", "20")
 
 	_, body, err := request.Get(fmt.Sprintf("/containers/%s/logs?follow=1&stdout=1&stderr=1&tail=all", name))
 	t1 := time.Now()
 	c.Assert(err, checker.IsNil)
 	body.Close()
 	elapsed := t1.Sub(t0).Seconds()
-	if elapsed > 20.0 {
+	if elapsed > 15.0 {
 		c.Fatalf("HTTP response was not immediate (elapsed %.1fs)", elapsed)
 	}
 }
