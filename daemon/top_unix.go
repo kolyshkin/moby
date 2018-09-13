@@ -50,7 +50,7 @@ func parsePSOutput(output []byte, procs []uint32, addPID bool) (*container.Conta
 	lines := strings.Split(string(output), "\n")
 	procList.Titles = fieldsASCII(lines[0])
 
-	errorNoPID := errors.New("Couldn't find PID field in ps output")
+	errorNoPid := errors.New("Couldn't find PID field in ps output")
 
 	var pidIndex, firstCol int
 	if addPID { // Option "-o pid" was prepended to ps args, first field is PID
