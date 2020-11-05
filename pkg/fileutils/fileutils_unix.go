@@ -3,20 +3,25 @@
 package fileutils // import "github.com/docker/docker/pkg/fileutils"
 
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/sirupsen/logrus"
 )
 
-// GetTotalUsedFds Returns the number of used File Descriptors by
-// reading it via /proc filesystem.
+// GetTotalUsedFds returns the number of file descriptors
+// opened by the current process.
 func GetTotalUsedFds() int {
-	if fds, err := ioutil.ReadDir(fmt.Sprintf("/proc/%d/fd", os.Getpid())); err != nil {
-		logrus.Errorf("Error opening /proc/%d/fd: %s", os.Getpid(), err)
-	} else {
-		return len(fds)
+	f, err := os.Open("/proc/self/fd")
+	if err != nil {
+		logrus.Error(err)
+		return -1
 	}
-	return -1
+
+	list, err := f.Readdirnames(-1)
+	if err != nil {
+		logrus.Error(err)
+		return -1
+	}
+
+	return len(list)
 }
